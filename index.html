@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>나만의 카카오맵 검색 서비스</title>
     <style>
-        /* 기본 스타일 초기화 */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -16,15 +15,12 @@
             height: 100%;
             font-family: 'Malgun Gothic', dotum, sans-serif;
         }
-
-        /* 메인 컨테이너: 왼쪽 검색창, 오른쪽 지도 배치 */
         .container {
             display: flex;
             width: 100%;
             height: 100%;
         }
-
-        /* 왼쪽 검색 사이드바 */
+        /* [조건 1] 왼쪽 검색창 영역 */
         .sidebar {
             width: 350px;
             height: 100%;
@@ -37,7 +33,7 @@
         }
         .search-box {
             display: flex;
-            gap: 100px; /* 입력창과 버튼 사이 간격 */
+            gap: 10px;
             margin-bottom: 20px;
         }
         .search-box input {
@@ -49,7 +45,7 @@
         }
         .search-box button {
             padding: 10px 15px;
-            background-color: #fee500; /* 카카오 시그니처 옐로우 */
+            background-color: #fee500;
             border: none;
             border-radius: 4px;
             cursor: pointer;
@@ -66,9 +62,12 @@
         .result-item {
             padding: 15px 10px;
             border-bottom: 1px solid #eee;
+            cursor: pointer;
         }
-
-        /* 오른쪽 지도 영역 */
+        .result-item:hover {
+            background-color: #f0f0f0;
+        }
+        /* [조건 1] 오른쪽 지도 영역 */
         .map-area {
             flex: 1;
             height: 100%;
@@ -94,129 +93,127 @@
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a0fd20fafdd0521fd9c52e4454561f37&libraries=services&autoload=false"></script>
     <script>
         let map;
-        let ps; // 장소 검색 객체
-        let infowindow; // 마커 클릭 시 띄울 말풍선
+        let ps; 
+        let infowindow;
 
-        // [조건 3] 지도가 완전히 로드된 후 실행되도록 v3 스크립트를 로드합니다.
+        // [조건 3 반영] 카카오 스크립트 파일이 100% 로드된 후 실행 보장
         kakao.maps.load(function() {
+            // 지도 초기화는 스크립트 로드 후에 진행해야 에러가 안 납니다!
+            initMap();
+        });
+
+        function initMap() {
             const mapContainer = document.getElementById('map'); 
             
-            // 기본 중심좌표 (현재 위치를 못 가져올 경우를 대비한 기본 서울 시청 좌표)
+            // 기본 중심좌표 설정 (사용자가 위치 권한을 거부할 때를 대비한 안전장치)
             const defaultOption = {
-                center: new kakao.maps.LatLng(37.566826, 126.9786567), 
-                level: 5 // [조건 4] 지도 확대 레벨 5
+                center: new kakao.maps.LatLng(37.566826, 126.9786567), // 서울시청 기본값
+                level: 5 // [조건] 확대 레벨 5
             };
 
-            // 지도 생성
+            // 지도 객체 생성
             map = new kakao.maps.Map(mapContainer, defaultOption);
-            
-            // 장소 검색 객체와 인포윈도우 초기화
             ps = new kakao.maps.services.Places();
             infowindow = new kakao.maps.InfoWindow({zIndex:1});
 
-            // [조건 2] 페이지 열리면 현재 위치 받아오기
-            getGeoLocation();
-        });
+            // [조건 2 반영] 지도가 켜지자마자 바로 사용자 위치 권한을 허용받아 중심으로 이동
+            setCurrentLocation();
+        }
 
-        // 현재 위치를 구하는 함수
-        function getGeoLocation() {
+        // 현재 위치를 받아 지도 중심을 옮기는 함수
+        function setCurrentLocation() {
             if (navigator.geolocation) {
+                // 브라우저에 위치 권한 팝업을 띄우고 위치를 가져옵니다.
                 navigator.geolocation.getCurrentPosition(function(position) {
                     const lat = position.coords.latitude;  // 위도
                     const lon = position.coords.longitude; // 경도
                     
                     const locPosition = new kakao.maps.LatLng(lat, lon);
                     
-                    // 지도의 중심을 현재 위치로 이동시킵니다.
+                    // 지도의 중심을 내 현재 위치로 변경!
                     map.setCenter(locPosition);
                     
-                    // 현재 위치에 마커를 하나 표시합니다.
+                    // 현재 위치에 표시할 마커 생성
                     const currentMarker = new kakao.maps.Marker({
                         map: map,
                         position: locPosition
                     });
                     
-                    infowindow.setContent('<div style="padding:5px;font-size:12px;">현재 나의 위치</div>');
+                    infowindow.setContent('<div style="padding:5px;font-size:12px;text-align:center;">📍 내 현재 위치</div>');
                     infowindow.open(map, currentMarker);
 
                 }, function(error) {
-                    console.error("위치 권한을 거부하셨거나 오류가 발생했습니다.", error);
+                    console.log("위치 권한을 거부했거나 내 위치를 찾을 수 없어 기본 위치(서울시청)로 표시합니다.");
                 });
             } else {
-                alert("이 브라우저에서는 GPS 위치 정보를 지원하지 않습니다.");
+                alert("이 브라우저에서는 GPS 내 위치 기능을 지원하지 않습니다.");
             }
         }
 
-        // 키워드 장소 검색을 요청하는 함수
+        // 키워드 장소 검색 함수
         function searchPlaces() {
             const keyword = document.getElementById('keyword').value;
 
-            if (!keyword.replace(/^\s+|\s+$/g, '')) {
-                alert('키워드를 입력해주세요!');
+            if (!keyword.trim()) {
+                alert('검색어를 입력해주세요!');
                 return false;
             }
 
-            // 카카오맵 키워드 검색 서비스 이용
             ps.keywordSearch(keyword, placesSearchCB); 
         }
 
-        // 장소검색이 완료됐을 때 호출되는 콜백함수
-        function placesSearchCB(data, status, pagination) {
+        // 검색 완료 콜백
+        function placesSearchCB(data, status) {
             if (status === kakao.maps.services.Status.OK) {
-                // 정상적으로 검색이 완료됐으면 검색 목록과 마커를 표출합니다
                 displayPlaces(data);
             } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
-                alert('검색 결과가 존재하지 않습니다.');
+                alert('검색 결과가 없습니다.');
             } else if (status === kakao.maps.services.Status.ERROR) {
-                alert('검색 결과 중 오류가 발생했습니다.');
+                alert('검색 중 에러가 발생했습니다.');
             }
         }
 
-        // 검색 결과 목록과 마커를 표출하는 함수
+        // 결과 목록과 마커 표시
         function displayPlaces(places) {
             const listEl = document.getElementById('placesList');
             const bounds = new kakao.maps.LatLngBounds();
             
-            // 기존 검색 결과 지우기
-            listEl.innerHTML = '';
+            listEl.innerHTML = ''; // 이전 결과 초기화
 
             for (let i = 0; i < places.length; i++) {
-                // 마커를 생성하고 지도에 표시합니다
                 const placePosition = new kakao.maps.LatLng(places[i].y, places[i].x);
                 const marker = new kakao.maps.Marker({
                     map: map,
                     position: placePosition
                 });
 
-                // 검색된 장소 위치를 기준으로 지도 범위를 재설정하기위해 LatLngBounds 객체에 좌표를 추가합니다
                 bounds.extend(placePosition);
 
-                // 왼쪽 사이드바에 결과 아이템 추가
                 const itemEl = document.createElement('li');
                 itemEl.className = 'result-item';
-                itemEl.innerHTML = `<h5><strong>${places[i].place_name}</strong></h5><span>${places[i].address_name}</span>`;
+                itemEl.innerHTML = `<h5><strong>${places[i].place_name}</strong></h5><small style="color:#666">${places[i].address_name}</small>`;
                 
-                // 목록 아이템이나 마커를 클릭했을 때 정보창 띄우기
+                // 마커 및 리스트 클릭 이벤트 연동
                 (function(marker, title) {
                     kakao.maps.event.addListener(marker, 'click', function() {
                         displayInfowindow(marker, title);
                     });
                     itemEl.onclick = function() {
                         displayInfowindow(marker, title);
-                        map.panTo(marker.getPosition());
+                        map.panTo(marker.getPosition()); // 클릭한 곳으로 부드럽게 이동
                     };
                 })(marker, places[i].place_name);
 
                 listEl.appendChild(itemEl);
             }
 
-            // 검색된 장소들이 모두 보이도록 지도 중심과 확대 레벨을 변경
+            // 검색된 모든 장소가 다 보이도록 지도 범위 조절
             map.setBounds(bounds);
         }
 
-        // 인포윈도우를 표시하는 함수
+        // 말풍선(인포윈도우) 표시
         function displayInfowindow(marker, title) {
-            const content = `<div style="padding:5px;z-index:1;font-size:12px;color:black;">${title}</div>`;
+            const content = `<div style="padding:5px;z-index:1;font-size:12px;color:black;text-align:center;">${title}</div>`;
             infowindow.setContent(content);
             infowindow.open(map, marker);
         }
