@@ -20,7 +20,7 @@
             width: 100%;
             height: 100%;
         }
-        /* [조건 1] 왼쪽 검색창 영역 */
+        /* 왼쪽 검색창 영역 */
         .sidebar {
             width: 350px;
             height: 100%;
@@ -31,6 +31,30 @@
             display: flex;
             flex-direction: column;
         }
+        
+        /* 카테고리 탭 스타일 */
+        .tab-menu {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .tab-button {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .tab-button.active {
+            background-color: #fee500;
+            border-color: #fee500;
+            color: #000;
+        }
+
         .search-box {
             display: flex;
             gap: 10px;
@@ -45,14 +69,15 @@
         }
         .search-box button {
             padding: 10px 15px;
-            background-color: #fee500;
+            background-color: #333;
+            color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
         }
         .search-box button:hover {
-            background-color: #fada0a;
+            background-color: #555;
         }
         .result-list {
             overflow-y: auto;
@@ -67,7 +92,38 @@
         .result-item:hover {
             background-color: #f0f0f0;
         }
-        /* [조건 1] 오른쪽 지도 영역 */
+        
+        /* 커스텀 인포윈도우 스타일 */
+        .custom-infowindow {
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 13px;
+            min-width: 200px;
+        }
+        .custom-infowindow h5 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        .custom-infowindow p {
+            margin: 0 0 5px 0;
+            color: #666;
+            font-size: 12px;
+        }
+        .custom-infowindow a {
+            display: inline-block;
+            color: #1e88e5;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .custom-infowindow a:hover {
+            text-decoration: underline;
+        }
+
+        /* 오른쪽 지도 영역 */
         .map-area {
             flex: 1;
             height: 100%;
@@ -78,10 +134,16 @@
 
     <div class="container">
         <div class="sidebar">
-            <h2>장소 검색</h2>
+            <h2>우리동네 맛집지도</h2>
             <hr style="margin: 15px 0; border: 0; height: 1px; background: #ccc;">
+            
+            <div class="tab-menu">
+                <button id="tabCE7" class="tab-button active" onclick="changeCategory('CE7')">☕ 카페</button>
+                <button id="tabFD6" class="tab-button" onclick="changeCategory('FD6')">🍔 식당</button>
+            </div>
+
             <div class="search-box">
-                <input type="text" id="keyword" placeholder="검색할 장소를 입력하세요" onkeypress="if(event.keyCode==13) searchPlaces()">
+                <input type="text" id="keyword" placeholder="동네 이름이나 키워드 입력" onkeypress="if(event.keyCode==13) searchPlaces()">
                 <button onclick="searchPlaces()">검색</button>
             </div>
             <ul id="placesList" class="result-list"></ul>
@@ -95,71 +157,95 @@
         let map;
         let ps; 
         let infowindow;
+        let currentCategory = 'CE7'; // 기본 카테고리는 카페(CE7)로 설정
+        let markers = []; // 생성된 마커들을 담아서 관리할 배열
 
-        // [조건 3 반영] 카카오 스크립트 파일이 100% 로드된 후 실행 보장
+        // 카카오 스크립트 파일 로드 보장
         kakao.maps.load(function() {
-            // 지도 초기화는 스크립트 로드 후에 진행해야 에러가 안 납니다!
             initMap();
         });
 
         function initMap() {
             const mapContainer = document.getElementById('map'); 
             
-            // 기본 중심좌표 설정 (사용자가 위치 권한을 거부할 때를 대비한 안전장치)
             const defaultOption = {
                 center: new kakao.maps.LatLng(37.566826, 126.9786567), // 서울시청 기본값
-                level: 5 // [조건] 확대 레벨 5
+                level: 5 // 확대 레벨 5
             };
 
-            // 지도 객체 생성
             map = new kakao.maps.Map(mapContainer, defaultOption);
             ps = new kakao.maps.services.Places();
             infowindow = new kakao.maps.InfoWindow({zIndex:1});
 
-            // [조건 2 반영] 지도가 켜지자마자 바로 사용자 위치 권한을 허용받아 중심으로 이동
+            // 지도가 켜지자마자 사용자 위치 권한을 허용받아 중심으로 이동
             setCurrentLocation();
         }
 
-        // 현재 위치를 받아 지도 중심을 옮기는 함수
+        // 현재 위치를 받아 지도 중심을 옮기고 노란 점으로 표시하는 함수
         function setCurrentLocation() {
             if (navigator.geolocation) {
-                // 브라우저에 위치 권한 팝업을 띄우고 위치를 가져옵니다.
                 navigator.geolocation.getCurrentPosition(function(position) {
-                    const lat = position.coords.latitude;  // 위도
-                    const lon = position.coords.longitude; // 경도
+                    const lat = position.coords.latitude;  
+                    const lon = position.coords.longitude; 
                     
                     const locPosition = new kakao.maps.LatLng(lat, lon);
                     
-                    // 지도의 중심을 내 현재 위치로 변경!
                     map.setCenter(locPosition);
                     
-                    // 현재 위치에 표시할 마커 생성
+                    // 내 현재 위치를 노란색 원(SVG) 모양 마커로 커스텀 표시
+                    const yellowDotSvg = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="%23FEE500" stroke="%23FFFFFF" stroke-width="2"/><circle cx="10" cy="10" r="4" fill="%23FFAA00"/></svg>';
+                    const imageSize = new kakao.maps.Size(20, 20);
+                    const imageOption = {offset: new kakao.maps.Point(10, 10)};
+                    const markerImage = new kakao.maps.MarkerImage(yellowDotSvg, imageSize, imageOption);
+
                     const currentMarker = new kakao.maps.Marker({
                         map: map,
-                        position: locPosition
+                        position: locPosition,
+                        image: markerImage
                     });
                     
-                    infowindow.setContent('<div style="padding:5px;font-size:12px;text-align:center;">📍 내 현재 위치</div>');
-                    infowindow.open(map, currentMarker);
+                    // 내 위치 마커 클릭 시 인포윈도우 띄우기
+                    kakao.maps.event.addListener(currentMarker, 'click', function() {
+                        infowindow.setContent('<div style="padding:5px;font-size:12px;text-align:center;">📍 내 현재 위치</div>');
+                        infowindow.open(map, currentMarker);
+                    });
 
                 }, function(error) {
-                    console.log("위치 권한을 거부했거나 내 위치를 찾을 수 없어 기본 위치(서울시청)로 표시합니다.");
+                    console.log("위치 권한 거부 또는 오류로 기본 위치를 유지합니다.");
                 });
             } else {
-                alert("이 브라우저에서는 GPS 내 위치 기능을 지원하지 않습니다.");
+                alert("이 브라우저에서는 GPS 기능을 지원하지 않습니다.");
             }
         }
 
-        // 키워드 장소 검색 함수
+        // 탭 클릭 시 카테고리를 변경하는 함수
+        function changeCategory(categoryCode) {
+            currentCategory = categoryCode;
+            
+            // 탭 버튼 스타일 활성화/비활성화 제어
+            document.getElementById('tabCE7').classList.remove('active');
+            document.getElementById('tabFD6').classList.remove('active');
+            document.getElementById('tab' + categoryCode).classList.add('active');
+            
+            // 검색어가 있을 경우 탭 전환 시 바로 재검색 실행
+            if (document.getElementById('keyword').value.trim()) {
+                searchPlaces();
+            }
+        }
+
+        // 키워드 + 카테고리 장소 검색 함수
         function searchPlaces() {
             const keyword = document.getElementById('keyword').value;
 
             if (!keyword.trim()) {
-                alert('검색어를 입력해주세요!');
+                alert('검색어를 입력해주세요! (예: 홍대, 강남역 등)');
                 return false;
             }
 
-            ps.keywordSearch(keyword, placesSearchCB); 
+            // 카테고리 코드를 결합하여 조건 기반 검색 수행
+            ps.keywordSearch(keyword, placesSearchCB, {
+                category_group_code: currentCategory
+            }); 
         }
 
         // 검색 완료 콜백
@@ -167,10 +253,19 @@
             if (status === kakao.maps.services.Status.OK) {
                 displayPlaces(data);
             } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
-                alert('검색 결과가 없습니다.');
+                removeMarkers(); // 기존 마커 지우기
+                alert('선택한 카테고리의 검색 결과가 없습니다.');
             } else if (status === kakao.maps.services.Status.ERROR) {
                 alert('검색 중 에러가 발생했습니다.');
             }
+        }
+
+        // 지도 위에 표시되고 있는 마커들을 모두 삭제하는 함수
+        function removeMarkers() {
+            for (let i = 0; i < markers.length; i++) {
+                markers[i].setMap(null);
+            }
+            markers = [];
         }
 
         // 결과 목록과 마커 표시
@@ -178,42 +273,73 @@
             const listEl = document.getElementById('placesList');
             const bounds = new kakao.maps.LatLngBounds();
             
-            listEl.innerHTML = ''; // 이전 결과 초기화
+            listEl.innerHTML = ''; // 이전 리스트 결과 초기화
+            removeMarkers();       // 이전 지도 마커 초기화 (탭 전환 및 재검색 대응)
+
+            // 카테고리에 맞춰 마커 이미지 색상 변경 (초록: 카페, 빨강: 식당)
+            let markerImageUrl = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png'; // 기본값
+            if (currentCategory === 'CE7') {
+                // 초록색 마커 핀 이미지 사용
+                markerImageUrl = 'https://maps.google.com/mapfiles/ms/icons/green-dot.png';
+            } else if (currentCategory === 'FD6') {
+                // 빨간색 마커 핀 이미지 사용
+                markerImageUrl = 'https://maps.google.com/mapfiles/ms/icons/red-dot.png';
+            }
+
+            const imageSize = new kakao.maps.Size(32, 32);
+            const markerImage = new kakao.maps.MarkerImage(markerImageUrl, imageSize);
 
             for (let i = 0; i < places.length; i++) {
                 const placePosition = new kakao.maps.LatLng(places[i].y, places[i].x);
+                
+                // 마커 생성 및 색상 커스텀 이미지 적용
                 const marker = new kakao.maps.Marker({
                     map: map,
-                    position: placePosition
+                    position: placePosition,
+                    image: markerImage
                 });
 
+                // 생성한 마커를 관리 배열에 추가
+                markers.push(marker);
                 bounds.extend(placePosition);
 
+                // 왼쪽 사이드바 리스트 아이템 생성
                 const itemEl = document.createElement('li');
                 itemEl.className = 'result-item';
                 itemEl.innerHTML = `<h5><strong>${places[i].place_name}</strong></h5><small style="color:#666">${places[i].address_name}</small>`;
                 
-                // 마커 및 리스트 클릭 이벤트 연동
-                (function(marker, title) {
+                // 클로저를 활용해 마커와 리스트의 클릭 이벤트 연동
+                (function(marker, placeData) {
                     kakao.maps.event.addListener(marker, 'click', function() {
-                        displayInfowindow(marker, title);
+                        displayCustomInfowindow(marker, placeData);
                     });
                     itemEl.onclick = function() {
-                        displayInfowindow(marker, title);
-                        map.panTo(marker.getPosition()); // 클릭한 곳으로 부드럽게 이동
+                        displayCustomInfowindow(marker, placeData);
+                        map.panTo(marker.getPosition()); 
                     };
-                })(marker, places[i].place_name);
+                })(marker, places[i]);
 
                 listEl.appendChild(itemEl);
             }
 
-            // 검색된 모든 장소가 다 보이도록 지도 범위 조절
+            // 검색된 장소들을 포함하도록 지도 영역 크기 조정
             map.setBounds(bounds);
         }
 
-        // 말풍선(인포윈도우) 표시
-        function displayInfowindow(marker, title) {
-            const content = `<div style="padding:5px;z-index:1;font-size:12px;color:black;text-align:center;">${title}</div>`;
+        // 장소 이름, 전화번호, 링크를 담은 커스텀 말풍선 표시
+        function displayCustomInfowindow(marker, placeData) {
+            const phone = placeData.phone ? placeData.phone : '정보 없음';
+            const placeUrl = placeData.place_url; // 카카오맵 상세페이지 링크
+
+            // 커스텀 스타일이 반영된 내부 HTML 구성
+            const content = `
+                <div class="custom-infowindow">
+                    <h5>📌 ${placeData.place_name}</h5>
+                    <p>📞 전화번호: ${phone}</p>
+                    <a href="${placeUrl}" target="_blank">카카오맵 상세정보 ↗</a>
+                </div>
+            `;
+            
             infowindow.setContent(content);
             infowindow.open(map, marker);
         }
